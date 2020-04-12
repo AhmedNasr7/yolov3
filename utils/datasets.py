@@ -53,7 +53,6 @@ class LoadImages:  # for inference
         images = [x for x in files if os.path.splitext(x)[-1].lower() in img_formats]
         videos = [x for x in files if os.path.splitext(x)[-1].lower() in vid_formats]
         nI, nV = len(images), len(videos)
-
         self.img_size = img_size
         self.files = images + videos
         self.nF = nI + nV  # number of files
@@ -68,9 +67,9 @@ class LoadImages:  # for inference
 
     def __iter__(self):
         self.count = 0
-        return self
 
     def __next__(self):
+        return self
         if self.count == self.nF:
             raise StopIteration
         path = self.files[self.count]
@@ -286,6 +285,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         # Define labels
         self.label_files = [x.replace('images', 'labels').replace(os.path.splitext(x)[-1], '.txt')
                             for x in self.img_files]
+        self.img_files = [x.replace('test_', '') for x in self.img_files]
 
         # Rectangular Training  https://github.com/ultralytics/yolov3/issues/232
         if self.rect:
