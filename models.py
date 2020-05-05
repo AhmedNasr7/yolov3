@@ -167,43 +167,43 @@ class YOLOLayer(nn.Module):
         # p.view(bs, 255, 13, 13) -- > (bs, 3, 13, 13, 85)  # (bs, anchors, grid, grid, classes + xywh)
         p = p.view(bs, self.na, self.no, self.ny, self.nx).permute(0, 1, 3, 4, 2).contiguous()  # prediction
 
-        if self.training:
-            return p
-
-        elif ONNX_EXPORT:
-            # Constants CAN NOT BE BROADCAST, ensure correct shape!
-            m = self.na * self.nx * self.ny
-            grid_xy = self.grid_xy.repeat((1, self.na, 1, 1, 1)).view(m, 2)
-            anchor_wh = self.anchor_wh.repeat((1, 1, self.nx, self.ny, 1)).view(m, 2) / self.ng
-
-            p = p.view(m, self.no)
-            xy = torch.sigmoid(p[:, 0:2]) + grid_xy  # x, y
-            wh = torch.exp(p[:, 2:4]) * anchor_wh  # width, height
-            p_cls = torch.sigmoid(p[:, 5:self.no]) * torch.sigmoid(p[:, 4:5])  # conf
-            return p_cls, xy / self.ng, wh
-
-        else:  # inference
+#        if self.training:
+#            return p
+#
+#        elif ONNX_EXPORT:
+#            # Constants CAN NOT BE BROADCAST, ensure correct shape!
+#            m = self.na * self.nx * self.ny
+#            grid_xy = self.grid_xy.repeat((1, self.na, 1, 1, 1)).view(m, 2)
+#            anchor_wh = self.anchor_wh.repeat((1, 1, self.nx, self.ny, 1)).view(m, 2) / self.ng
+#
+#            p = p.view(m, self.no)
+#            xy = torch.sigmoid(p[:, 0:2]) + grid_xy  # x, y
+#            wh = torch.exp(p[:, 2:4]) * anchor_wh  # width, height
+#            p_cls = torch.sigmoid(p[:, 5:self.no]) * torch.sigmoid(p[:, 4:5])  # conf
+#            return p_cls, xy / self.ng, wh
+#
+#        else:  # inference
             # s = 1.5  # scale_xy  (pxy = pxy * s - (s - 1) / 2)
-            io = p.clone()  # inference output
-            io[..., :2] = torch.sigmoid(io[..., :2]) + self.grid_xy  # xy
-            io[..., 2:4] = torch.exp(io[..., 2:4]) * self.anchor_wh  # wh yolo method
-            # io[..., 2:4] = ((torch.sigmoid(io[..., 2:4]) * 2) ** 3) * self.anchor_wh  # wh power method
-            io[..., :4] *= self.stride
+        io = p.clone()  # inference output
+        io[..., :2] = torch.sigmoid(io[..., :2]) + self.grid_xy  # xy
+        io[..., 2:4] = torch.exp(io[..., 2:4]) * self.anchor_wh  # wh yolo method
+        # io[..., 2:4] = ((torch.sigmoid(io[..., 2:4]) * 2) ** 3) * self.anchor_wh  # wh power method
+        io[..., :4] *= self.stride
 
-            if 'default' in self.arc:  # seperate obj and cls
-                torch.sigmoid_(io[..., 4:])
-            elif 'BCE' in self.arc:  # unified BCE (80 classes)
-                torch.sigmoid_(io[..., 5:])
-                io[..., 4] = 1
-            elif 'CE' in self.arc:  # unified CE (1 background + 80 classes)
-                io[..., 4:] = F.softmax(io[..., 4:], dim=4)
-                io[..., 4] = 1
+        if 'default' in self.arc:  # seperate obj and cls
+            torch.sigmoid_(io[..., 4:])
+        elif 'BCE' in self.arc:  # unified BCE (80 classes)
+            torch.sigmoid_(io[..., 5:])
+            io[..., 4] = 1
+        elif 'CE' in self.arc:  # unified CE (1 background + 80 classes)
+            io[..., 4:] = F.softmax(io[..., 4:], dim=4)
+            io[..., 4] = 1
 
-            if self.nc == 1:
-                io[..., 5] = 1  # single-class model https://github.com/ultralytics/yolov3/issues/235
+        if self.nc == 1:
+            io[..., 5] = 1  # single-class model https://github.com/ultralytics/yolov3/issues/235
 
-            # reshape from [1, 3, 13, 13, 85] to [1, 507, 85]
-            return io.view(bs, -1, self.no), p
+        # reshape from [1, 3, 13, 13, 85] to [1, 507, 85]
+        return io.view(bs, -1, self.no), p
 
 
 class Darknet(nn.Module):
@@ -255,14 +255,14 @@ class Darknet(nn.Module):
             if verbose:
                 print(i, x.shape)
 
-        if self.training:
-            return output
-        elif ONNX_EXPORT:
-            x = [torch.cat(x, 0) for x in zip(*output)]
-            return x[0], torch.cat(x[1:3], 1)  # scores, boxes: 3780x80, 3780x4
-        else:
-            io, p = list(zip(*output))  # inference output, training output
-            return torch.cat(io, 1), p
+#        if self.training:
+#            return output
+#        elif ONNX_EXPORT:
+#            x = [torch.cat(x, 0) for x in zip(*output)]
+#            return x[0], torch.cat(x[1:3], 1)  # scores, boxes: 3780x80, 3780x4
+#        else:
+        io, p = list(zip(*output))  # inference output, training output
+        return torch.cat(io, 1), p
 
     def fuse(self):
         # Fuse Conv2d + BatchNorm2d layers throughout model

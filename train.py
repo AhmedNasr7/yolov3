@@ -207,6 +207,13 @@ def train():
     model.hyp = hyp  # attach hyperparameters to model
     model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device)  # attach class weights
     maps = np.zeros(nc)  # mAP per class
+###################################################################################################
+    names = load_classes(data_dict['names'])  # class names
+    iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
+    iouv = iouv[0].view(1)  # comment for mAP@0.5:0.95
+    niou = iouv.numel()
+
+###################################################################################################
     # torch.autograd.set_detect_anomaly(True)
     results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
     t0 = time.time()
@@ -215,7 +222,7 @@ def train():
     print('Starting training for %g epochs...' % epochs)
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------
         model.train()
-
+        seen = 0
         # Prebias
         if prebias:
             if epoch < 3:  # prebias
@@ -237,12 +244,22 @@ def train():
             dataset.indices = random.choices(range(dataset.n), weights=image_weights, k=dataset.n)  # rand weighted idx
 
         mloss = torch.zeros(4).to(device)  # mean losses
-        print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
         pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
+###############################################################################################
+
+        s = ('%20s' + '%10s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP@0.5', 'F1')
+        p, r, f1, mp, mr, map, mf1 = 0., 0., 0., 0., 0., 0., 0.
+        detailed_loss = torch.zeros(3)
+        stats, ap, ap_class = [], [], []
+
+###############################################################################################
+        
+        print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
             targets = targets.to(device)
+            _, _, height, width = imgs.shape  # batch size, channels, height, width
 
             # Multi-Scale training
             if opt.multi_scale:
@@ -252,6 +269,7 @@ def train():
                 if sf != 1:
                     ns = [math.ceil(x * sf / 32.) * 32 for x in imgs.shape[2:]]  # new shape (stretched to 32-multiple)
                     imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
+                _, _, height, width = imgs.shape  # batch size, channels, height, width
 
             # Plot images with bounding boxes
             if ni == 0:
@@ -272,8 +290,61 @@ def train():
             #         x['weight_decay'] = hyp['weight_decay'] * g
 
             # Run model
-            pred = model(imgs)
-
+            inf_out,pred = model(imgs)
+    #################################################################################################
+#            with torch.no_grad():
+#                output = non_max_suppression(inf_out,conf_thres=0.95,iou_thres=0.1)
+#                for si, predi in enumerate(output):
+#                    labels = targets[targets[:, 0] == si, 1:]
+#                    nl = len(labels)
+#                    tcls = labels[:, 0].tolist() if nl else []  # target class
+#                    seen += 1
+#
+#                    if predi is None:        
+#                        if nl:
+#                            stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
+#                        continue
+#
+#                    # Append to text file
+#                    # with open('test.txt', 'a') as file:
+#                    #    [file.write('%11.5g' * 7 % tuple(x) + '\n') for x in pred]
+#
+#                    # Clip boxes to image bounds
+#                    clip_coords(predi, (height, width))
+#
+#
+#                    # Assign all predictions as incorrect
+#                    correct = torch.zeros(len(predi), niou, dtype=torch.bool)
+#                    if nl:
+#                        detected = []  # target indices
+#                        tcls_tensor = labels[:, 0]
+#
+#                        # target boxes
+#                        tbox = xywh2xyxy(labels[:, 1:5]) * torch.Tensor([width, height, width, height]).to(device)
+#
+#                        # Per target class
+#                        for cls in torch.unique(tcls_tensor):
+#                            ti = (cls == tcls_tensor).nonzero().view(-1)  # prediction indices
+#                            pi = (cls == predi[:, 5]).nonzero().view(-1)  # target indices
+#
+#                            # Search for detections
+#                            if len(pi):
+#                                # Prediction to target ious
+#                                ious, ind = box_iou(predi[pi, :4], tbox[ti]).max(1)  # best ious, indices
+#
+#                                # Append detections
+#                                for j in (ious > iouv[0]).nonzero():
+#                                    d = ti[ind[j]]  # detected target
+#                                    if d not in detected:
+#                                        detected.append(d)
+#                                        correct[pi[j]] = (ious[j] > iouv).cpu()  # iou_thres is 1xn
+#                                        if len(detected) == nl:  # all targets already located in image
+#                                            break
+#
+#                    # Append statistics (correct, conf, pcls, tcls)
+#                    stats.append((correct, predi[:, 4].cpu(), predi[:, 5].cpu(), tcls))
+##################################################################################################
+#            model.train()
             # Compute loss
             loss, loss_items = compute_loss(pred, targets, model, not prebias)
             if not torch.isfinite(loss):
@@ -295,15 +366,40 @@ def train():
                 optimizer.step()
                 optimizer.zero_grad()
 
+
             # Print batch results
             mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
             mem = torch.cuda.memory_cached() / 1E9 if torch.cuda.is_available() else 0  # (GB)
             s = ('%10s' * 2 + '%10.3g' * 6) % (
                 '%g/%g' % (epoch, epochs - 1), '%.3gG' % mem, *mloss, len(targets), img_size)
-            pbar.set_description(s)
-
+            
+            if(ni%10==9):
+                pbar.set_description(s)
             # end batch ------------------------------------------------------------------------------------------------
+###########################################################################################
+        
+#        stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
+#
+#        if len(stats):
+#            p, r, ap, f1, ap_class = ap_per_class(*stats)
+#            if niou > 1:
+#                p, r, ap, f1 = p[:, 0], r[:, 0], ap.mean(1), ap[:, 0]  # [P, R, AP@0.5:0.95, AP@0.5]
+#            mp, mr, map, mf1 = p.mean(), r.mean(), ap.mean(), f1.mean()
+#            nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
+#        else:
+#            nt = torch.zeros(1)
+#        # Print results
+#        pf = '%20s' + '%10.3g' * 6  # print format
+#        print(('%20s' + '%10s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP@0.5', 'F1'))
+#        print(pf % ('all', seen, nt.sum(), mp, mr, map, mf1))
+#
+#        # Print results per class
+#        for i, c in enumerate(ap_class):
+#            print(pf % (names[c], seen, nt[c], p[i], r[i], ap[i], f1[i]))
 
+#################################################################################################
+
+        
         # Process epoch results
         final_epoch = epoch + 1 == epochs
         if not opt.notest or final_epoch:  # Calculate mAP

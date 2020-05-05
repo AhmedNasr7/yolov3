@@ -19,6 +19,7 @@ def test(cfg,
          single_cls=False,
          model=None,
          dataloader=None):
+    print('\ntesting \n\n\n\n')
     # Initialize/load model and set device
     if model is None:
         device = torch_utils.select_device(opt.device, batch_size=batch_size)
@@ -42,7 +43,7 @@ def test(cfg,
             model = nn.DataParallel(model)
     else:  # called by train.py
         device = next(model.parameters()).device  # get model device
-        verbose = False
+        verbose = True             #    verbose = True for training to be like test
 
     # Configure run
     data = parse_data_cfg(data)
@@ -90,7 +91,6 @@ def test(cfg,
 
             # Run NMS
             output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres)
-
         # Statistics per image
         for si, pred in enumerate(output):
             labels = targets[targets[:, 0] == si, 1:]
@@ -98,7 +98,7 @@ def test(cfg,
             tcls = labels[:, 0].tolist() if nl else []  # target class
             seen += 1
 
-            if pred is None:
+            if pred is None:        ## probably none when training , check what to do to make training pass this
                 if nl:
                     stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
                 continue
@@ -111,19 +111,6 @@ def test(cfg,
             clip_coords(pred, (height, width))
 
             # Append to pycocotools JSON dictionary
-            if save_json:
-                # [{"image_id": 42, "category_id": 18, "bbox": [258.15, 41.29, 348.26, 243.78], "score": 0.236}, ...
-                image_id = int(Path(paths[si]).stem.split('_')[-1])
-                box = pred[:, :4].clone()  # xyxy
-                scale_coords(imgs[si].shape[1:], box, shapes[si][0], shapes[si][1])  # to original shape
-                box = xyxy2xywh(box)  # xywh
-                box[:, :2] -= box[:, 2:] / 2  # xy center to top-left corner
-                for di, d in enumerate(pred):
-                    jdict.append({'image_id': image_id,
-                                  'category_id': coco91class[int(d[5])],
-                                  'bbox': [floatn(x, 3) for x in box[di]],
-                                  'score': floatn(d[4], 5)})
-
             # Assign all predictions as incorrect
             correct = torch.zeros(len(pred), niou, dtype=torch.bool)
             if nl:
