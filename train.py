@@ -91,11 +91,11 @@ def train():
 
     if opt.adam:
         # hyp['lr0'] *= 0.1  # reduce lr (i.e. SGD=5E-3, Adam=5E-4)
-        optimizer = optim.Adam(pg0, lr=hyp['lr0'])
+        optimizer = optim.Adam(pg0, lr=opt.lr)
         # optimizer = AdaBound(pg0, lr=hyp['lr0'], final_lr=0.1)
     else:
-        optimizer = optim.SGD(pg0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
-    optimizer.add_param_group({'params': pg1, 'weight_decay': hyp['weight_decay']})  # add pg1 with weight_decay
+        optimizer = optim.SGD(pg0, lr=opt.lr, momentum=opt.momentum, nesterov=True)
+    optimizer.add_param_group({'params': pg1, 'weight_decay': opt.decay})  # add pg1 with weight_decay
     optimizer.add_param_group({'params': pg2})  # add pg2 (biases)
     del pg0, pg1, pg2
 
@@ -233,9 +233,9 @@ def train():
                 prebias = False
 
             # Bias optimizer settings
-            optimizer.param_groups[2]['lr'] = ps[0]
+            optimizer.param_groups[2]['lr'] = opt.lr
             if optimizer.param_groups[2].get('momentum') is not None:  # for SGD but not Adam
-                optimizer.param_groups[2]['momentum'] = ps[1]
+                optimizer.param_groups[2]['momentum'] = opt.momentum
 
         # Update image weights (optional)
         if dataset.image_weights:
@@ -291,60 +291,7 @@ def train():
 
             # Run model
             inf_out,pred = model(imgs)
-    #################################################################################################
-#            with torch.no_grad():
-#                output = non_max_suppression(inf_out,conf_thres=0.95,iou_thres=0.1)
-#                for si, predi in enumerate(output):
-#                    labels = targets[targets[:, 0] == si, 1:]
-#                    nl = len(labels)
-#                    tcls = labels[:, 0].tolist() if nl else []  # target class
-#                    seen += 1
-#
-#                    if predi is None:        
-#                        if nl:
-#                            stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
-#                        continue
-#
-#                    # Append to text file
-#                    # with open('test.txt', 'a') as file:
-#                    #    [file.write('%11.5g' * 7 % tuple(x) + '\n') for x in pred]
-#
-#                    # Clip boxes to image bounds
-#                    clip_coords(predi, (height, width))
-#
-#
-#                    # Assign all predictions as incorrect
-#                    correct = torch.zeros(len(predi), niou, dtype=torch.bool)
-#                    if nl:
-#                        detected = []  # target indices
-#                        tcls_tensor = labels[:, 0]
-#
-#                        # target boxes
-#                        tbox = xywh2xyxy(labels[:, 1:5]) * torch.Tensor([width, height, width, height]).to(device)
-#
-#                        # Per target class
-#                        for cls in torch.unique(tcls_tensor):
-#                            ti = (cls == tcls_tensor).nonzero().view(-1)  # prediction indices
-#                            pi = (cls == predi[:, 5]).nonzero().view(-1)  # target indices
-#
-#                            # Search for detections
-#                            if len(pi):
-#                                # Prediction to target ious
-#                                ious, ind = box_iou(predi[pi, :4], tbox[ti]).max(1)  # best ious, indices
-#
-#                                # Append detections
-#                                for j in (ious > iouv[0]).nonzero():
-#                                    d = ti[ind[j]]  # detected target
-#                                    if d not in detected:
-#                                        detected.append(d)
-#                                        correct[pi[j]] = (ious[j] > iouv).cpu()  # iou_thres is 1xn
-#                                        if len(detected) == nl:  # all targets already located in image
-#                                            break
-#
-#                    # Append statistics (correct, conf, pcls, tcls)
-#                    stats.append((correct, predi[:, 4].cpu(), predi[:, 5].cpu(), tcls))
-##################################################################################################
-#            model.train()
+
             # Compute loss
             loss, loss_items = compute_loss(pred, targets, model, not prebias)
             if not torch.isfinite(loss):
@@ -375,34 +322,83 @@ def train():
             
             if(ni%10==9):
                 pbar.set_description(s)
-            # end batch ------------------------------------------------------------------------------------------------
-###########################################################################################
-        
-#        stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
-#
-#        if len(stats):
-#            p, r, ap, f1, ap_class = ap_per_class(*stats)
-#            if niou > 1:
-#                p, r, ap, f1 = p[:, 0], r[:, 0], ap.mean(1), ap[:, 0]  # [P, R, AP@0.5:0.95, AP@0.5]
-#            mp, mr, map, mf1 = p.mean(), r.mean(), ap.mean(), f1.mean()
-#            nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
-#        else:
-#            nt = torch.zeros(1)
-#        # Print results
-#        pf = '%20s' + '%10.3g' * 6  # print format
-#        print(('%20s' + '%10s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP@0.5', 'F1'))
-#        print(pf % ('all', seen, nt.sum(), mp, mr, map, mf1))
-#
-#        # Print results per class
-#        for i, c in enumerate(ap_class):
-#            print(pf % (names[c], seen, nt[c], p[i], r[i], ap[i], f1[i]))
+    #################################################################################################
+                ########    PRINT F1 METRICS DURING TRAINING        #########
+
+            with torch.no_grad():
+                output = non_max_suppression(inf_out,conf_thres=0.1,iou_thres=0.6)
+                for si, predi in enumerate(output):
+                    labels = targets[targets[:, 0] == si, 1:]
+                    nl = len(labels)
+                    tcls = labels[:, 0].tolist() if nl else []  # target class
+                    seen += 1
+
+                    if predi is None:        
+                        if nl:
+                            stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
+                        continue
+                    # Append to text file
+                    # with open('test.txt', 'a') as file:
+                    #    [file.write('%11.5g' * 7 % tuple(x) + '\n') for x in pred]
+
+                    # Clip boxes to image bounds
+                    clip_coords(predi, (height, width))
+
+
+                    # Assign all predictions as incorrect
+                    correct = torch.zeros(len(predi), niou, dtype=torch.bool)
+                    if nl:
+                        detected = []  # target indices
+                        tcls_tensor = labels[:, 0]
+                        # target boxes
+                        tbox = xywh2xyxy(labels[:, 1:5]) * torch.Tensor([width, height, width, height]).to(device)
+
+                        # Per target class
+                        for cls in torch.unique(tcls_tensor):
+                            ti = (cls == tcls_tensor).nonzero().view(-1)  # prediction indices
+                            pi = (cls == predi[:, 5]).nonzero().view(-1)  # target indices
+                            # Search for detections
+                            if len(pi):
+                                # Prediction to target ious
+                                ious, ind = box_iou(predi[pi, :4], tbox[ti]).max(1)  # best ious, indices
+
+                                # Append detections
+                                for j in (ious > iouv[0]).nonzero():
+                                    d = ti[ind[j]]  # detected target
+                                    if d not in detected:
+                                        detected.append(d)
+                                        correct[pi[j]] = (ious[j] > iouv).cpu()  # iou_thres is 1xn
+                                        if len(detected) == nl:  # all targets already located in image
+                                            break
+
+                    # Append statistics (correct, conf, pcls, tcls)
+                    stats.append((correct, predi[:, 4].cpu(), predi[:, 5].cpu(), tcls))
+
+
+        stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
+        if len(stats):
+            p, r, ap, f1, ap_class = ap_per_class(*stats)
+            if niou > 1:
+                p, r, ap, f1 = p[:, 0], r[:, 0], ap.mean(1), ap[:, 0]  # [P, R, AP@0.5:0.95, AP@0.5]
+            mp, mr, map, mf1 = p.mean(), r.mean(), ap.mean(), f1.mean()
+            nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
+        else:
+            nt = torch.zeros(1)
+        # Print results
+        pf = '%20s' + '%10.3g' * 6  # print format
+        print(('%20s' + '%10s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP@0.5', 'F1'))
+        print(pf % ('all', seen, nt.sum(), mp, mr, map, mf1))
+
+        # Print results per class
+        for i, c in enumerate(ap_class):
+            print(pf % (names[c], seen, nt[c], p[i], r[i], ap[i], f1[i]))
 
 #################################################################################################
 
         
         # Process epoch results
         final_epoch = epoch + 1 == epochs
-        if not opt.notest or final_epoch:  # Calculate mAP
+        if epoch%opt.testevery == (opt.testevery -1) or final_epoch:  # Calculate mAP
             is_coco = any([x in data for x in ['coco.data', 'coco2014.data', 'coco2017.data']]) and model.nc == 80
             results, maps = test.test(cfg,
                                       data,
@@ -414,8 +410,6 @@ def train():
                                       save_json=final_epoch and is_coco,
                                       single_cls=opt.single_cls,
                                       dataloader=testloader)
-
-        # Update scheduler
         scheduler.step()
 
         # Write epoch results
@@ -500,7 +494,7 @@ if __name__ == '__main__':
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', action='store_true', help='resume training from last.pt')
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
-    parser.add_argument('--notest', action='store_true', help='only test final epoch')
+    parser.add_argument('--testevery',type=int, default=1, help='only test final epoch')
     parser.add_argument('--evolve', action='store_true', help='evolve hyperparameters')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
@@ -510,7 +504,10 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--adam', action='store_true', help='use adam optimizer')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
-    parser.add_argument('--var', type=float, help='debug variable')
+    parser.add_argument('--lr', type=float, default=0.001 ,help='learning rate')
+    parser.add_argument('--momentum', type=float, default=0.95 ,help='momentum')
+    parser.add_argument('--decay', type=float, default=0.001 ,help='decay')
+    
     opt = parser.parse_args()
     opt.weights = last if opt.resume else opt.weights
     print(opt)
@@ -534,7 +531,7 @@ if __name__ == '__main__':
         train()  # train normally
 
     else:  # Evolve hyperparameters (optional)
-        opt.notest = True  # only test final epoch
+#        opt.testevery = True  # only test final epoch
         opt.nosave = True  # only save final checkpoint
         if opt.bucket:
             os.system('gsutil cp gs://%s/evolve.txt .' % opt.bucket)  # download evolve.txt if exists

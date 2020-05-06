@@ -19,7 +19,7 @@ def test(cfg,
          single_cls=False,
          model=None,
          dataloader=None):
-    print('\ntesting \n\n\n\n')
+    print('testing:')
     # Initialize/load model and set device
     if model is None:
         device = torch_utils.select_device(opt.device, batch_size=batch_size)
@@ -189,6 +189,8 @@ def test(cfg,
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
+
+    print('\n\n\n')
     return (mp, mr, map, mf1, *(loss / len(dataloader)).tolist()), maps
 
 
