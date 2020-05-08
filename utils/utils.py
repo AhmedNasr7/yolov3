@@ -360,6 +360,8 @@ class FocalLoss(nn.Module):
         else:  # 'none'
             return loss
 
+## new added function
+
 
 def compute_loss(p, targets, model, giou_flag=True):  # predictions, targets, model
     ft = torch.cuda.FloatTensor if p[0].is_cuda else torch.Tensor

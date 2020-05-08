@@ -49,6 +49,30 @@ if f:
         hyp[k] = v
 
 
+def get_loss_weights(class_name, weight):
+	'''
+	initial implementation of the function 
+	return numpy array of shape 1 x n where n is the number of classes
+	need to check the loss function vector shape 
+	and modify weight vector shape
+	'''
+	class_names_file = './cfg/robosub.names'
+	index = 0; num_classes = 0
+	with open(class_names_file, 'r') as f:
+		classes = f.readlines()
+		print(classes)
+		idx = classes.index(class_name + '\n')
+		num_classes = len(classes)
+
+	weight_vector = np.ones((1, num_classes))
+	weight_vector[:, idx] = weight
+
+
+	return weight_vector
+
+
+
+
 def train():
     cfg = opt.cfg
     data = opt.data
