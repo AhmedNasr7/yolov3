@@ -51,7 +51,9 @@ class LoadImages:  # for inference
             files = [path]
 
         images = [x for x in files if os.path.splitext(x)[-1].lower() in img_formats]
+        print(len(images))
         videos = [x for x in files if os.path.splitext(x)[-1].lower() in vid_formats]
+        print(len(videos))
         nI, nV = len(images), len(videos)
         self.img_size = img_size
         self.files = images + videos
@@ -67,9 +69,9 @@ class LoadImages:  # for inference
 
     def __iter__(self):
         self.count = 0
+        return self
 
     def __next__(self):
-        return self
         if self.count == self.nF:
             raise StopIteration
         path = self.files[self.count]
@@ -95,6 +97,7 @@ class LoadImages:  # for inference
             # Read image
             self.count += 1
             img0 = cv2.imread(path)  # BGR
+            print(path)
             assert img0 is not None, 'Image Not Found ' + path
             print('image %g/%g %s: ' % (self.count, self.nF, path), end='')
 
@@ -105,7 +108,7 @@ class LoadImages:  # for inference
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
         img = np.ascontiguousarray(img, dtype=np.float16 if self.half else np.float32)  # uint8 to fp16/fp32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
-
+        print(img.shape)
         # cv2.imwrite(path + '.letterbox.jpg', 255 * img.transpose((1, 2, 0))[:, :, ::-1])  # save letterbox image
         return path, img, img0, self.cap
 
