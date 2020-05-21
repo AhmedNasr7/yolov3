@@ -19,6 +19,7 @@ class Detector:
         self.device = torch_utils.select_device(device='gpu')
 
         self.model = Darknet(self.cfg, img_size)   # Initialize model
+        
         # Load weights
         attempt_download(self.weights) 
           
@@ -66,10 +67,10 @@ class Detector:
         #t = time.time()
 
         img = torch.from_numpy(img).to(self.device)
-      	
-      	with torch.no_grad():
 
-	        pred = self.model(img)[0]
+        with torch.no_grad():
+
+        	pred = self.model(img)[0]
 
 	        if self.half:
 	            pred = pred.float()
