@@ -56,6 +56,9 @@ class Detector:
 
         self.dataset = LoadImages(self.source_img, img_size=self.img_size, half=self.half)
 
+        self.detections= []
+        self.confidence = -1 # initially
+
 
 
     def detect(self, conf_thres = 0.3, iou_thres = 0.5):
@@ -95,8 +98,6 @@ class Detector:
                 if det is not None and len(det):
                     # Rescale boxes from img_size to im0 size
                     det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
-                    print('detection.shape : ',det.shape)
-                    print('detection : ',det)
                     # Print results
                     for c in det[:, -1].unique():
                         n = (det[:, -1] == c).sum()  # detections per class
@@ -104,6 +105,10 @@ class Detector:
 
                     # Write results
                     for *xyxy, conf, cls in det:
+
+                        detection = [int(cls.item()), xyxy[0].item(), xyxy[1].item(), xyxy[2].item(), xyxy[3].item()]
+                        self.detections.append(detection)
+                        self.confidence = conf.item()
 
                         if self.save_img:  # Add bbox to image
                             label = '%s %.2f' % (self.names[int(cls)], conf)
@@ -122,6 +127,8 @@ class Detector:
             print('Results saved to %s' % self.save_path)
             print('Done. (%.3fs)' % (time.time() - t0))
 
+        return self.detections, self.confidence
+
 
 
 
@@ -133,4 +140,6 @@ if __name__ == '__main__':
     weights = './best-AUV-gate.weights'
     opt = parser.parse_args()
     detector = Detector(opt, source_img, cfg, weights, save_img=True)
-    detector.detect(0.99, 0.1)
+    detections, confidence = detector.detect(0.99, 0.1)
+    print(detections)
+    print("confidence: ", confidence)
