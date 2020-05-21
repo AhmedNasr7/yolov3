@@ -18,6 +18,7 @@ class Detector:
         self.cfg = cfg
         self.device = torch_utils.select_device(device='0')
         self.weights = weights
+        self.save_img = save_img
 
         self.model = Darknet(self.cfg, img_size)   # Initialize model
         
@@ -70,37 +71,35 @@ class Detector:
 
         img = img.transpose((2, 0, 1))
 
-        img = torch.from_numpy(img).to(self.device)
-        img = np.ascontiguousarray(img, dtype=np.float16 if self.half else np.float32).to('cuda')  # uint8 to fp16/fp32
+        img = np.ascontiguousarray(img, dtype=np.float16 if self.half else np.float32) # uint8 to fp16/fp32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
+
+
+        img = torch.from_numpy(img).to(self.device)
+
         with torch.no_grad():
+            pred = self.model(img.unsqueeze(dim=0))[0]
 
-        	pred = self.model(img.unsqueeze(dim=0))[0]
+            if self.half:
+                pred = pred.float()
 
-	        if self.half:
-	            pred = pred.float()
+            pred = non_max_suppression(pred, self.conf_thres, self.iou_thres, classes=self.classes, agnostic=self.agnostic_nms)
 
-	        # Apply NMS
-	        pred = non_max_suppression(pred, self.conf_thres, self.iou_thres, classes=self.classes, agnostic=self.agnostic_nms)
-            
-            s = ''
-            
             im0 = np.copy(image)
-            
-            
-            for i, det in enumerate(pred):  # detections per image
-	           
-                save_path = str(Path(self.save_path) / 'output.jpg')
+            s = ''
 
-                s += '%gx%g ' % img.shape[2:], % img.shape[2:]  # print string
-                
+            for i, det in enumerate(pred):  # detections per image
+
+                save_path = str(Path(self.save_path) / 'output.jpg')
+                s += '%g' % img.shape[2:]
                 if det is not None and len(det):
-                    # Rescale boxes from img_size to im0 size
+
                     det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
                     print('detection.shape : ',det.shape)
                     print('detection : ',det)
-                    # Print results
+
                     for c in det[:, -1].unique():
+
                         n = (det[:, -1] == c).sum()  # detections per class
                         s += '%g %ss, ' % (n, self.names[int(c)])  # add to string
 
@@ -118,10 +117,10 @@ class Detector:
                 if self.save_img:
                     cv2.imwrite(save_path, im0)
                     
-            if self.save_txt or self.save_img:
-                print('Results saved to %s' % os.getcwd() + os.sep + self.out)
+            if self.save_img:
+                print('Results saved to %s' % os.getcwd() + os.sep + self.save_path)
                 if platform == 'darwin':  # MacOS
-                    os.system('open ' + self.out + ' ' + save_path)
+                    os.system('open ' + self.save_path + ' ' + 'output.jpg')
 
             print('Done. (%.3fs)' % (time.time() - t0))
 
