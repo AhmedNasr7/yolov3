@@ -16,13 +16,14 @@ class Detector:
         self.source_img = source_img
         img_size = 416 ## to be changed
         self.cfg = cfg
-        self.device = torch_utils.select_device(device='gpu')
+        self.device = torch_utils.select_device(device='0')
+        self.weights = weights
 
         self.model = Darknet(self.cfg, img_size)   # Initialize model
         
         # Load weights
         attempt_download(self.weights) 
-          
+   		
         if self.weights.endswith('.pt'):  # pytorch format
             self.model.load_state_dict(torch.load(self.weights, map_location=self.device)['model']) ## model loading is here
         else:  # darknet format
@@ -55,9 +56,7 @@ class Detector:
 
         self.conf_thres = conf_thres
         self.iou_thres = iou_thres
-      
   
-       
 
         img = cv2.imread(self.source_img) ## to be changed
 
@@ -124,4 +123,5 @@ if __name__ == '__main__':
 	weights = './weights/yolov3-spp.weights'
 
 	detector = Detector(source_img, cfg, weights, save_img=True)
+	detector.detect()
 
