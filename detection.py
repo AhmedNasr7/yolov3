@@ -29,7 +29,7 @@ class Detector:
         if self.weights.endswith('.pt'):  # pytorch format
             self.model.load_state_dict(torch.load(self.weights, map_location=self.device)['model']) ## model loading is here
         else:  # darknet format
-            load_darknet_weights(self.model, self.weights) ## or here???
+            load_darknet_weights(self.model, self.weights)
         
         self.model.to(self.device).eval() ## evaluation mode
 

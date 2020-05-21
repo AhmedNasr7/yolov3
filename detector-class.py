@@ -46,12 +46,10 @@ class Detector:
         self.agnostic_nms = True
 
         # Get names and colors
-        self.names = './cls.names'
+        self.names = './data/coco.names'
         self.names = load_classes(self.names)
         self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(self.names))]
-        self.classes = [0, 1]
-        self.save_img = True
-        self.dataset = LoadImages(self.source_img, img_size=img_size, half=self.half)
+        self.classes = 1
 
 
     def detect(self, conf_thres = 0.3, iou_thres = 0.5):
@@ -138,4 +136,3 @@ if __name__ == '__main__':
 
 	detector = Detector(source_img, cfg, weights, save_img=True)
 	detector.detect(0.99, 0.1)
-
