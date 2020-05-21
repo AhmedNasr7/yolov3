@@ -14,18 +14,18 @@ class Detector:
     def __init__(self, opt, source_img, cfg, weights, save_img=False):
         #soource_img, weilghts_path, 
         self.source_img = source_img
-        img_size = 416 ## to be changed
+        self.img_size = 416
         self.cfg = cfg
         self.device = torch_utils.select_device(device='0')
         self.weights = weights
         self.save_img = save_img
 
-        self.model = Darknet(self.cfg, img_size)   # Initialize model
+        self.model = Darknet(self.cfg, self.img_size)   # Initialize model
         self.opt = opt
         
         # Load weights
         attempt_download(self.weights) 
-   		
+        
         if self.weights.endswith('.pt'):  # pytorch format
             self.model.load_state_dict(torch.load(self.weights, map_location=self.device)['model']) ## model loading is here
         else:  # darknet format
@@ -47,17 +47,16 @@ class Detector:
         self.agnostic_nms = True
 
         # Get names and colors
-        self.names = './cls.names'
+        self.names = './robosub.names'
         self.names = load_classes(self.names)
         self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(self.names))]
         self.classes = self.opt.classes
 
         self.half = self.half and self.device.type != 'cpu'  # half precision only supported on CUDA
 
-        self.names = './cls.names'
         self.names = load_classes(self.names)
         self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(self.names))]
-        self.classes = None
+        self.dataset = LoadImages(self.source_img, img_size=self.img_size, half=self.half)
 
 
 
@@ -123,7 +122,7 @@ class Detector:
 
         if self.save_img:
             print('Results saved to %s' % os.getcwd() + os.sep + self.save_path)
-        print('Done. (%.3fs)' % (time.time() - t0))
+            print('Done. (%.3fs)' % (time.time() - t0))
 
 
 
@@ -131,11 +130,10 @@ class Detector:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class')
-	source_img = '/content/1.jpg'
-	cfg = './cfg/yolov3-spp.cfg'
-	weights = './weights/yolov3-spp.weights'
+    source_img = '/content/1.jpg'
+    cfg = './yolov3-spp2.cfg'
+    weights = './best.weights'
     opt = parser.parse_args()
-
-	detector = Detector(opt, source_img, cfg, weights, save_img=True)
-	detector.detect(0.99, 0.1)
+    detector = Detector(opt, source_img, cfg, weights, save_img=True)
+    detector.detect(0.99, 0.1)
 
