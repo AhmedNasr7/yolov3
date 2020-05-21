@@ -60,16 +60,21 @@ class Detector:
 
         img = cv2.imread(self.source_img) ## to be changed
 
-        # Run inference
-        t0 = time.time()
         #for path, img, im0s, vid_cap in self.dataset:
         #t = time.time()
+
+        # Run inference
+        t0 = time.time()
+
+        img = img.reshape(img.shape[0], img.shape[1], 3)
+
+        img = img.transpose((2, 0, 1))
 
         img = torch.from_numpy(img).to(self.device)
 
         with torch.no_grad():
 
-        	pred = self.model(img)[0]
+        	pred = self.model(img.unsqueeze())[0]
 
 	        if self.half:
 	            pred = pred.float()
