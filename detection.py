@@ -29,12 +29,12 @@ class Detector:
         if self.weights.endswith('.pt'):  # pytorch format
             self.model.load_state_dict(torch.load(self.weights, map_location=self.device)['model']) ## model loading is here
         else:  # darknet format
-            load_darknet_weights(self.model, self.weights)
+            load_darknet_weights(self.model, self.weights) ## or here???
         
         self.model.to(self.device).eval() ## evaluation mode
 
         if save_img:
-            self.save_path = './' # to the current dir
+            self.save_path = '/content/output/' # to the current dir
 
         self.half = False
 
@@ -47,15 +47,13 @@ class Detector:
         self.agnostic_nms = True
 
         # Get names and colors
-        self.names = './robosub.names'
+        self.names = '/content/robosub.names'
         self.names = load_classes(self.names)
         self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(self.names))]
         self.classes = self.opt.classes
 
         self.half = self.half and self.device.type != 'cpu'  # half precision only supported on CUDA
 
-        self.names = load_classes(self.names)
-        self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(self.names))]
         self.dataset = LoadImages(self.source_img, img_size=self.img_size, half=self.half)
 
 
@@ -68,7 +66,7 @@ class Detector:
   
 
         #image = cv2.imread(self.source_img) ## to be changed
-
+        t0 = time.time()
         for path, img, im0s, vid_cap in self.dataset:
 
             t = time.time()
@@ -121,7 +119,7 @@ class Detector:
                     
 
         if self.save_img:
-            print('Results saved to %s' % os.getcwd() + os.sep + self.save_path)
+            print('Results saved to %s' % self.save_path)
             print('Done. (%.3fs)' % (time.time() - t0))
 
 
@@ -131,9 +129,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class')
     source_img = '/content/1.jpg'
-    cfg = './yolov3-spp2.cfg'
-    weights = './best.weights'
+    cfg = '/content/yolov3-spp.cfg'
+    weights = './best-AUV-gate.weights'
     opt = parser.parse_args()
     detector = Detector(opt, source_img, cfg, weights, save_img=True)
     detector.detect(0.99, 0.1)
-
