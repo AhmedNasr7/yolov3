@@ -32,15 +32,15 @@ class Detector:
         self.model.to(self.device).eval() ## evaluation mode
 
         if save_img:
-            save_path = './' # to the current dir
+            self.save_path = './' # to the current dir
 
-        self.half = True
+        self.half = False
 
         # Half precision 
 
         self.half = self.half and self.device.type != 'cpu'  # half precision only supported on CUDA
-        if self.half:
-            self.model.half()
+        #if self.half:
+        #self.model.half()
 
         self.classes = ''
         self.agnostic_nms = True
@@ -58,7 +58,7 @@ class Detector:
         self.iou_thres = iou_thres
   
 
-        img = cv2.imread(self.source_img) ## to be changed
+        image = cv2.imread(self.source_img) ## to be changed
 
         #for path, img, im0s, vid_cap in self.dataset:
         #t = time.time()
@@ -66,59 +66,64 @@ class Detector:
         # Run inference
         t0 = time.time()
 
-        img = img.reshape(img.shape[0], img.shape[1], 3)
+        img = image.reshape(image.shape[0], image.shape[1], 3)
 
         img = img.transpose((2, 0, 1))
 
         img = torch.from_numpy(img).to(self.device)
-
+        img = np.ascontiguousarray(img, dtype=np.float16 if self.half else np.float32).to('cuda')  # uint8 to fp16/fp32
+        img /= 255.0  # 0 - 255 to 0.0 - 1.0
         with torch.no_grad():
 
-        	pred = self.model(img.unsqueeze())[0]
+        	pred = self.model(img.unsqueeze(dim=0))[0]
 
 	        if self.half:
 	            pred = pred.float()
 
 	        # Apply NMS
 	        pred = non_max_suppression(pred, self.conf_thres, self.iou_thres, classes=self.classes, agnostic=self.agnostic_nms)
-
-	       
-	        # Process detections
-	        for i, det in enumerate(pred):  # detections per image
+            
+            s = ''
+            
+            im0 = np.copy(image)
+            
+            
+            for i, det in enumerate(pred):  # detections per image
 	           
-	            save_path = str(Path(self.out) / Path(p).name)
-	            s += '%gx%g ' % img.shape[2:]  # print string
-	            
-	            if det is not None and len(det):
-	                # Rescale boxes from img_size to im0 size
-	                det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
-	                print('detection.shape : ',det.shape)
-	                print('detection : ',det)
-	                # Print results
-	                for c in det[:, -1].unique():
-	                    n = (det[:, -1] == c).sum()  # detections per class
-	                    s += '%g %ss, ' % (n, self.names[int(c)])  # add to string
+                save_path = str(Path(self.save_path) / 'output.jpg')
 
-	                # Write results
-	                for *xyxy, conf, cls in det:
-	                    if self.save_img or self.view_img:  # Add bbox to image
-	                        label = '%s %.2f' % (self.names[int(cls)], conf)
-	                        plot_one_box(xyxy, im0, label=label, color=self.colors[int(cls)])
+                s += '%gx%g ' % img.shape[2:], % img.shape[2:]  # print string
+                
+                if det is not None and len(det):
+                    # Rescale boxes from img_size to im0 size
+                    det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
+                    print('detection.shape : ',det.shape)
+                    print('detection : ',det)
+                    # Print results
+                    for c in det[:, -1].unique():
+                        n = (det[:, -1] == c).sum()  # detections per class
+                        s += '%g %ss, ' % (n, self.names[int(c)])  # add to string
 
-	            # Print time (inference + NMS)
-	            print('%sDone. (%.3fs)' % (s, time.time() - t0))
+                    # Write results
+                    for *xyxy, conf, cls in det:
+                        if self.save_img or self.view_img:  # Add bbox to image
+                            label = '%s %.2f' % (self.names[int(cls)], conf)
+                            plot_one_box(xyxy, im0, label=label, color=self.colors[int(cls)])
+
+                # Print time (inference + NMS)
+                print('%sDone. (%.3fs)' % (s, time.time() - t0))
 
 
-	            # Save results (image with detections)
-	            if self.save_img:
-	            	cv2.imwrite(save_path, im0)
-	               
-	        if self.save_txt or self.save_img:
-	            print('Results saved to %s' % os.getcwd() + os.sep + self.out)
-	            if platform == 'darwin':  # MacOS
-	                os.system('open ' + self.out + ' ' + save_path)
+                # Save results (image with detections)
+                if self.save_img:
+                    cv2.imwrite(save_path, im0)
+                    
+            if self.save_txt or self.save_img:
+                print('Results saved to %s' % os.getcwd() + os.sep + self.out)
+                if platform == 'darwin':  # MacOS
+                    os.system('open ' + self.out + ' ' + save_path)
 
-	        print('Done. (%.3fs)' % (time.time() - t0))
+            print('Done. (%.3fs)' % (time.time() - t0))
 
 
 
