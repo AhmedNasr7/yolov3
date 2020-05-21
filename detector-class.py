@@ -43,13 +43,13 @@ class Detector:
         #if self.half:
         #self.model.half()
 
-        self.classes = ''
         self.agnostic_nms = True
 
         # Get names and colors
         self.names = './data/coco.names'
         self.names = load_classes(self.names)
         self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(self.names))]
+        self.classes = 1
 
 
     def detect(self, conf_thres = 0.3, iou_thres = 0.5):
@@ -79,12 +79,15 @@ class Detector:
 
         with torch.no_grad():
             pred = self.model(img.unsqueeze(dim=0))[0]
+            print("p: ", pred)
 
             if self.half:
                 pred = pred.float()
+                print("shalf pred", pred)
 
             pred = non_max_suppression(pred, self.conf_thres, self.iou_thres, classes=self.classes, agnostic=self.agnostic_nms)
-
+            print("nms configs: ", self.conf_thres, self.iou_thres, self.classes, self.agnostic_nms)
+            print("preds: ", pred)
             im0 = np.copy(image)
             s = ''
 
@@ -108,6 +111,7 @@ class Detector:
                         if self.save_img or self.view_img:  # Add bbox to image
                             label = '%s %.2f' % (self.names[int(cls)], conf)
                             plot_one_box(xyxy, im0, label=label, color=self.colors[int(cls)])
+                            print("lbl, cls", label, cls)
 
                 # Print time (inference + NMS)
                 print('%sDone. (%.3fs)' % (s, time.time() - t0))
@@ -117,20 +121,19 @@ class Detector:
                 if self.save_img:
                     cv2.imwrite(save_path, im0)
                     
-            if self.save_img:
-                print('Results saved to %s' % os.getcwd() + os.sep + self.save_path)
-                if platform == 'darwin':  # MacOS
-                    os.system('open ' + self.save_path + ' ' + 'output.jpg')
+           #if self.save_img:
+                #print('Results saved to %s' % os.getcwd() + os.sep + self.save_path)
+              
 
             print('Done. (%.3fs)' % (time.time() - t0))
 
 
 
 if __name__ == '__main__':
-	source_img = './img.jpg'
+	source_img = '/content/1.jpg'
 	cfg = './cfg/yolov3-spp.cfg'
 	weights = './weights/yolov3-spp.weights'
 
 	detector = Detector(source_img, cfg, weights, save_img=True)
-	detector.detect()
+	detector.detect(0.99, 0.1)
 
