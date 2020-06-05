@@ -1016,8 +1016,9 @@ def plot_results_overlay(start=0, stop=0):  # from utils.utils import *; plot_re
 
 def plot_results(start=0, stop=0, bucket='', id=()):  # from utils.utils import *; plot_results()
     # Plot training results files 'results*.txt'
-    fig, ax = plt.subplots(2, 5, figsize=(14, 7))
+    fig, ax = plt.subplots(2, 6, figsize=(12, 6))
     ax = ax.ravel()
+    sum=0
     s = ['GIoU', 'Objectness', 'Classification', 'Precision', 'Recall',
          'val GIoU', 'val Objectness', 'val Classification', 'mAP@0.5', 'F1']
     if bucket:
@@ -1034,11 +1035,20 @@ def plot_results(start=0, stop=0, bucket='', id=()):  # from utils.utils import 
             if i in [0, 1, 2, 5, 6, 7]:
                 y[y == 0] = np.nan  # dont show zero loss values
                 # y /= y[0]  # normalize
+            if i in [0,1,2]:
+                sum+= y
+                Avg=sum/3
+
             ax[i].plot(x, y, marker='.', label=Path(f).stem)
             ax[i].set_title(s[i])
             if i in [5, 6, 7]:  # share train and val loss y axes
                 ax[i].get_shared_y_axes().join(ax[i], ax[i - 5])
-
+            
+            
+    ax[10].plot(x, sum, marker='.', label="Loss Sum")
+    ax[10].set_title("Loss Sum")
+    ax[11].plot(x, Avg, marker='.', label="Loss Avergae")
+    ax[11].set_title("Loss Avergae")            
     fig.tight_layout()
     ax[1].legend()
     fig.savefig('results.png', dpi=200)
